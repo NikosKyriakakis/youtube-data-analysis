@@ -1,0 +1,285 @@
+// Query 2.1
+
+db.GB.aggregate ([
+    {
+        $match: {
+            channel_title: "Saturday Night Live"
+        }
+    },
+    {
+        $project: {
+            _id: 1,
+            video_id: 1,
+            title: 1,
+            views: {
+                $convert: {
+                    input: "$views",
+                    to: "int"
+                }
+            },
+            likes: {
+                $convert: {
+                    input: "$likes",
+                    to: "int"
+                }
+            },
+            dislikes: {
+                $convert: {
+                    input: "$dislikes",
+                    to: "int"
+                }
+            }
+        }
+    },
+    {
+        $group: {
+            _id: "$video_id",
+            title: {$first: "$title"},
+            views: { $max: "$views" },
+            likes: { $max: "$likes"  },
+            dislikes: { $max: "$dislikes" }
+        }
+    },
+    {
+        $sort: {
+            views: -1
+        }
+    },
+    {
+        $out: "query_2_1"
+    }
+])
+
+mongoexport --host localhost --db bd2 --collection query_2_1 --limit 20 --type=csv --out query_2_1.csv --fields title,views,likes,dislikes
+// Query 2.2
+
+db.GB.aggregate ([
+    {
+        $project: {
+            _id: 1,
+            video_id: 1,
+            tag_count: { $size: { $split: ["$tags", "|"] } },
+            views: {
+                $convert: {
+                    input: "$views",
+                    to: "int"
+                }
+            }
+        }
+    },
+    {
+        $group: {
+            _id: "$video_id",
+            views: { $max: "$views" },
+            tag_count: { $first: "$tag_count" }
+        }
+    },
+    {
+        $sort: {
+            views: -1
+        }
+    },
+    {
+        $out: "query_2_2"
+    }
+])
+
+mongoexport --host localhost --db bd2 --collection query_2_2 --limit 20 --type=csv --out query_2_2.csv --fields _id,views,tag_count
+
+
+// Query 2.3
+
+db.GB.aggregate
+([
+    { 
+        $project: { 
+            _id: 1, 
+            tag_name: { $split: ["$tags", "|"] },
+            video_id: 1
+        } 
+    },
+    {
+        $unwind: "$tag_name"
+    },
+    {
+        $group: { 
+            _id: "$tag_name",
+            unique_video_id: { $addToSet: "$video_id" }
+        }
+    },
+    {
+        $addFields: {
+          video_count: { $size: "$unique_video_id" }
+        }
+    },
+    {
+        $sort: {
+            video_count: -1
+        }
+    },
+    {
+        $project: {
+            _id: 1,
+            video_count: 1
+        }
+    },
+    {
+        $out: "query_2_3_gb"
+    }
+])
+
+mongoexport --host localhost --db bd2 --collection query_2_3_gb --limit 20 --type=csv --out query_2_3_gb.csv --fields _id,video_count
+
+
+db.USA.aggregate
+([
+    { 
+        $project: { 
+            _id: 1, 
+            tag_name: { $split: ["$tags", "|"] },
+            video_id: 1
+        } 
+    },
+    {
+        $unwind: "$tag_name"
+    },
+    {
+        $group: { 
+            _id: "$tag_name",
+            unique_video_id: { $addToSet: "$video_id" }
+        }
+    },
+    {
+        $addFields: {
+          video_count: { $size: "$unique_video_id" }
+        }
+    },
+    {
+        $sort: {
+            video_count: -1
+        }
+    },
+    {
+        $project: {
+            _id: 1,
+            video_count: 1
+        }
+    },
+    {
+        $out: "query_2_3_usa"
+    }
+])
+
+mongoexport --host localhost --db bd2 --collection query_2_3_usa --limit 20 --type=csv --out query_2_3_usa.csv --fields _id,video_count
+
+
+// Query 2.4
+
+db.GB.aggregate ([
+    {
+        $project: {
+            _id: 1,
+            video_id: 1,
+            views: {
+                $convert: {
+                    input: "$views",
+                    to: "int"
+                }
+            },
+            likes: {
+                $convert: {
+                    input: "$likes",
+                    to: "int"
+                }
+            },
+            dislikes: {
+                $convert: {
+                    input: "$dislikes",
+                    to: "int"
+                }
+            },
+            comments_disabled: 1
+        }
+    },
+    {
+        $group: {
+            _id: "$video_id",
+            views: { $max: "$views" },
+            likes: { $max: "$likes" },
+            dislikes: { $max: "$dislikes" },
+            comments_disabled: { $first: "$comments_disabled" }
+        }
+    },
+    {
+        $group: {
+            _id: "$comments_disabled",
+            avg_views: { $avg: { $toInt: "$views" } },
+            avg_likes: { $avg: { $toInt: "$likes" } },
+            avg_dislikes: { $avg: { $toInt: "$dislikes" } }
+        }
+    },
+    {
+        $out: "query_2_4"
+    }
+])
+
+mongoexport --host localhost --db bd2 --collection query_2_4 --limit 20 --type=csv --out query_2_4.csv --fields _id,avg_views,avg_likes,avg_dislikes
+
+
+// Query 2.5
+
+db.GB.aggregate ([
+    {
+        $project: {
+            date: { 
+                $dateFromString: {
+                    dateString: {
+                        $substr: ["$publish_time", 0, 10] 
+                    } 
+                }
+            },
+            video_id: 1
+        }
+    },
+    {
+        $group: {
+            _id: "$video_id",
+            date: { $first: "$date" }
+        }
+    },
+    {
+        $match: {
+            date: {    
+                $gte: ISODate("2017-12-05"),
+                $lte: ISODate("2018-03-05")
+            }
+        }      
+    },
+    {
+        $group: {
+            _id: "$date",
+            video_count: {
+                $count: {}
+            }
+        }
+    },
+    {
+        $sort: {
+           _id: 1 
+        }
+    },
+    {
+        $project: {
+            _id: 0,
+            year: {$year: "$_id"},
+            month: {$month: "$_id"},
+            day: {$dayOfMonth: "$_id"},
+            video_count: 1
+        }
+    },
+    {
+        $out: "query_2_5"
+    }
+])
+
+mongoexport --host localhost --db bd2 --collection query_2_5 --limit 20 --type=csv --out query_2_5.csv --fields year,month,day,video_count
